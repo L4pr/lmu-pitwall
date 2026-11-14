@@ -203,6 +203,9 @@ pub enum ServerMessage {
         weather: WeatherData,
         session_laps: i32,
         session_minutes: f64,
+        /// Player's best lap ever at this track in this car class (s), from the
+        /// results database. `None` = no history, or the lookup is still running.
+        historical_best_lap: Option<f64>,
     },
 
     /// Low frequency: ~5Hz — electronics / driver aids (native telemetry)

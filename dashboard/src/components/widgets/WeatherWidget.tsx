@@ -346,7 +346,13 @@ export default function WeatherWidget() {
   const weatherHistory     = useTelemetryStore((s) => s.weatherHistory)
   const scoringSessionTime = useTelemetryStore((s) => s.scoring.session_time)
   const sessionMinutes     = useTelemetryStore((s) => s.session.session_minutes)
-  const avgLapTime         = useTelemetryStore((s) => s.telemetry.fuel_avg_lap_time)
+  const sessionAvgLap      = useTelemetryStore((s) => s.telemetry.fuel_avg_lap_time)
+  const historicalBest     = useTelemetryStore((s) => s.session.historical_best_lap)
+  const useHistorical      = useSettingsStore((s) => s.useHistoricalBestLap)
+  // Until this session has a lap of its own, the best lap ever here stands in.
+  const avgLapTime         = sessionAvgLap > 0 ? sessionAvgLap
+    : useHistorical ? (historicalBest ?? 0)
+    : 0
   const toDisplayTemp      = useSettingsStore((s) => s.toDisplayTemp)
   const tempUnitLabel      = useSettingsStore((s) => s.tempUnitLabel)
   const weatherDetail      = useSettingsStore((s) => s.weatherDetail)

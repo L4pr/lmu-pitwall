@@ -63,6 +63,7 @@ export default function FuelManager() {
   const avgLapTimeFromBridge = useTelemetryStore((s) => s.telemetry.fuel_avg_lap_time)
   const sessionMinutes   = useTelemetryStore((s) => s.session.session_minutes)
   const sessionLaps      = useTelemetryStore((s) => s.session.session_laps)
+  const historicalBest   = useTelemetryStore((s) => s.session.historical_best_lap)
   const sessionTime      = useTelemetryStore((s) => s.scoring.session_time)
   const sessionType      = useTelemetryStore((s) => s.scoring.session_type)
   const scoring          = useTelemetryStore((s) => s.scoring)
@@ -73,13 +74,15 @@ export default function FuelManager() {
   const toDisplayFuel = useSettingsStore((s) => s.toDisplayFuel)
   const fuelUnitLabel = useSettingsStore((s) => s.fuelUnitLabel)
   const lapReserve    = useSettingsStore((s) => s.lapReserve)
+  const useHistorical = useSettingsStore((s) => s.useHistoricalBestLap)
 
   const unit     = fuelUnitLabel()
   const decimals = unit === 'gal' ? 2 : 1
 
   const hasData = sampleCount > 0
 
-  // --- Average lap time (rolling median from bridge, fallback to scoring) ---
+  // --- Average lap time (rolling median from bridge, fallback to scoring,
+  //     then to the best lap ever driven here before this session has one) ---
   const playerVeh = scoring.vehicles.find((v) => v.id === scoring.player_vehicle_id) ?? null
   const lastLap   = playerVeh?.last_lap_time ?? 0
   const bestLap   = playerVeh?.best_lap_time ?? 0
@@ -88,6 +91,7 @@ export default function FuelManager() {
     ? avgLapTimeFromBridge
     : isValidLapTime(lastLap) ? lastLap
     : isValidLapTime(bestLap) ? bestLap
+    : useHistorical && isValidLapTime(historicalBest ?? 0) ? historicalBest!
     : 0
 
   // --- VE data ---

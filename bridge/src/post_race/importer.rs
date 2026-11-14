@@ -609,7 +609,7 @@ fn choose_anchors(candidates: Vec<AnchorCandidate>) -> (Vec<(String, i64)>, Vec<
 /// How far a live lap time may differ from the XML's before we refuse to treat
 /// them as the same lap. Both come from the same sim, so this only absorbs
 /// rounding.
-const LAP_TIME_TOLERANCE: f64 = 0.05;
+pub(crate) const LAP_TIME_TOLERANCE: f64 = 0.05;
 
 /// Below this many online sessions, "present in all of them" says nothing —
 /// with two races a single shared opponent is unremarkable.

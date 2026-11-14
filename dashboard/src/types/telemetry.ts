@@ -184,6 +184,8 @@ export interface SessionInfo {
   weather: WeatherData
   session_laps: number
   session_minutes: number
+  /** Player's best lap ever at this track in this class (s); null = no history */
+  historical_best_lap: number | null
 }
 
 export interface ElectronicsUpdate {

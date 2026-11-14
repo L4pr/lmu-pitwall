@@ -222,6 +222,14 @@ export default function Settings({ open, onClose }: Props) {
                 <span style={{ fontFamily: fonts.body, fontSize: 15, color: colors.textMuted }}>laps</span>
               </div>
             </Row>
+            {/* Until the session has a lap time, lap estimates use the best lap ever driven at this track in this class */}
+            <Row label="Use Track Best Lap">
+              <SegmentControl
+                value={s.useHistoricalBestLap ? 'on' : 'off'}
+                options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]}
+                onChange={(v) => s.update({ useHistoricalBestLap: v === 'on' })}
+              />
+            </Row>
           </Section>
 
           {/* Connection */}

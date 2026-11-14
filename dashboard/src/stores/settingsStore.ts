@@ -26,6 +26,7 @@ export interface SettingsState {
   pressureUnit: PressureUnit
   fuelUnit: FuelUnit
   lapReserve: number   // extra laps of fuel added to refuel estimate (e.g. 0.5)
+  useHistoricalBestLap: boolean  // estimate laps from the best lap ever at this track until the session has one
   wsHost: string       // empty = auto (window.location.hostname)
   wsPort: number
   primaryColor: string
@@ -88,6 +89,7 @@ export const SETTINGS_DEFAULTS: SettingsState = {
   pressureUnit: 'bar',
   fuelUnit: 'liters',
   lapReserve: 0.5,
+  useHistoricalBestLap: true,
   wsHost: '',
   wsPort: 0,
   primaryColor: '#facc15',
@@ -138,12 +140,12 @@ export const useSettingsStore = create<SettingsStore>()(
       reset: () => set(SETTINGS_DEFAULTS),
 
       exportSettings: () => {
-        const { speedUnit, tempUnit, pressureUnit, fuelUnit, lapReserve, wsHost, wsPort, primaryColor, accentColor, fpsLimit, inputChartFps,
+        const { speedUnit, tempUnit, pressureUnit, fuelUnit, lapReserve, useHistoricalBestLap, wsHost, wsPort, primaryColor, accentColor, fpsLimit, inputChartFps,
           timeWidgetShowComputerTime, timeWidgetClockFormat, timeWidgetShowSessionElapsed, timeWidgetShowTimeRemaining, timeWidgetShowCurrentLap,
           standingsShowCompound, standingsShowCarType, standingsShowVE, standingsShowDamage, standingsClassFilter, standingsGapMode,
           battleMode, battleValueMode, battleCount, battleShowPosName, battleShowSectors, battleShowLaps, battleShowGap, damageDetail, weatherDetail, trackMapDetail, resultsPath,
           postRaceSortCol, postRaceSortDir } = get()
-        return JSON.stringify({ speedUnit, tempUnit, pressureUnit, fuelUnit, lapReserve, wsHost, wsPort, primaryColor, accentColor, fpsLimit, inputChartFps,
+        return JSON.stringify({ speedUnit, tempUnit, pressureUnit, fuelUnit, lapReserve, useHistoricalBestLap, wsHost, wsPort, primaryColor, accentColor, fpsLimit, inputChartFps,
           timeWidgetShowComputerTime, timeWidgetClockFormat, timeWidgetShowSessionElapsed, timeWidgetShowTimeRemaining, timeWidgetShowCurrentLap,
           standingsShowCompound, standingsShowCarType, standingsShowVE, standingsShowDamage, standingsClassFilter, standingsGapMode,
           battleMode, battleValueMode, battleCount, battleShowPosName, battleShowSectors, battleShowLaps, battleShowGap, damageDetail, weatherDetail, trackMapDetail, resultsPath,
@@ -159,6 +161,7 @@ export const useSettingsStore = create<SettingsStore>()(
           if (data.pressureUnit === 'bar' || data.pressureUnit === 'psi') valid.pressureUnit = data.pressureUnit
           if (data.fuelUnit === 'liters' || data.fuelUnit === 'gallons') valid.fuelUnit = data.fuelUnit
           if (typeof data.lapReserve === 'number' && data.lapReserve >= 0 && data.lapReserve <= 5) valid.lapReserve = data.lapReserve
+          if (typeof data.useHistoricalBestLap === 'boolean') valid.useHistoricalBestLap = data.useHistoricalBestLap
           if (typeof data.wsHost === 'string') valid.wsHost = data.wsHost
           if (typeof data.wsPort === 'number' && data.wsPort >= 0 && data.wsPort < 65536) valid.wsPort = data.wsPort
           if (typeof data.primaryColor === 'string') valid.primaryColor = data.primaryColor

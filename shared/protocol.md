@@ -59,6 +59,13 @@ source a given car used, and do not need to — the two are the same quantity.
 
 Track info, weather, session type/duration.
 
+`historical_best_lap` (f64 | null) is the player's fastest lap ever at this
+track in this car class, read from the results database once per session on a
+background thread, again after a session restart, and retried with backoff if
+it fails. The Fuel Manager and Weather widget use it for lap estimates until the
+session produces a lap time of its own, unless *Settings → Use Track Best Lap*
+is off. `null` = no history, or the lookup is still running.
+
 ### `ConnectionStatus` (event-based)
 
 Sent when LMU connects or disconnects, and whenever `telemetry_valid` changes.

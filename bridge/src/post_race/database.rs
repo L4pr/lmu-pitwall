@@ -141,6 +141,11 @@ CREATE TABLE IF NOT EXISTS live_laps (
 );
 
 CREATE INDEX IF NOT EXISTS idx_live_laps_match ON live_laps(player_name, lap_num);
+-- Historical best lap lookup (`track_best::lookup`): filters by track and
+-- class, joins on (player_name, lap_num) and matches lap_time within a
+-- tolerance — together one narrow range probe per result-file lap.
+CREATE INDEX IF NOT EXISTS idx_live_laps_track
+    ON live_laps(track_name, car_class, player_name, lap_num, lap_time);
 
 -- Per-lap virtual energy for every *other* car on track, captured live from
 -- LMU_Data at each of their S/F crossings.

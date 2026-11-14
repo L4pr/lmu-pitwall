@@ -88,6 +88,7 @@ interface SessionSection {
   weather: WeatherData | null
   session_laps: number
   session_minutes: number
+  historical_best_lap: number | null
 }
 
 // Omit the 'type' discriminator — we only store the data
@@ -198,6 +199,7 @@ const defaultSession: SessionSection = {
   weather: null,
   session_laps: 0,
   session_minutes: 0,
+  historical_best_lap: null,
 }
 
 const defaultElectronics: ElectronicsSection = {
@@ -413,6 +415,7 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
               weather:         msg.weather,
               session_laps:    msg.session_laps,
               session_minutes: msg.session_minutes,
+              historical_best_lap: msg.historical_best_lap ?? null,
             },
             weatherHistory,
             _weatherSessionKey: sessionKey,

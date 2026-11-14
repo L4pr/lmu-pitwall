@@ -325,7 +325,11 @@ fn build_electronics_update(snap: &ElectronicsSnapshot) -> ServerMessage {
     }
 }
 
-fn build_session_info(sc: &ScoringFrame, forecast: Vec<garage_api::WeatherForecastNode>) -> ServerMessage {
+fn build_session_info(
+    sc: &ScoringFrame,
+    forecast: Vec<garage_api::WeatherForecastNode>,
+    historical_best_lap: Option<f64>,
+) -> ServerMessage {
     let info = &sc.mScoringInfo;
     // mDarkCloud is unreliable in LMU (often stuck at 0). Derive cloudiness from the
     // START node's sky_type instead (0=clear…10=heavy overcast+storm → 0.0–1.0).
@@ -411,6 +415,7 @@ fn build_session_info(sc: &ScoringFrame, forecast: Vec<garage_api::WeatherForeca
         // Only send a valid lap count when it's a genuine lap-limited session.
         session_laps:    if info.mMaxLaps > 0 && info.mMaxLaps < 999_000 { info.mMaxLaps } else { 0 },
         session_minutes: if info.mEndET > 0.0 { info.mEndET / 60.0 } else { 0.0 },
+        historical_best_lap,
     }
 }
 
@@ -872,6 +877,10 @@ async fn task_broadcaster(
     let mut fuel_snapshot = FuelSnapshot::default();
     let mut fuel_session_key = String::new();
 
+    // Best lap ever at this track/class — the dashboard's lap time until the
+    // session has one of its own. Looked up off-thread once per session.
+    let mut historical_best = post_race::track_best::HistoricalBestLap::new();
+
     // Template registry for rule-fired TTS synthesis.
     let engineer_templates = race_engineer::rules::templates::TemplateRegistry::new();
     // Audio broadcast sender — only audio-role clients receive EngineerAudio.
@@ -974,7 +983,16 @@ async fn task_broadcaster(
             };
 
             let session_msg = if send_session {
-                s.scoring.as_ref().map(|sc| build_session_info(sc, s.weather_forecast.clone()))
+                s.scoring.as_ref().map(|sc| {
+                    let class = sc.player().map(|v| bytes_to_str(&v.mVehicleClass)).unwrap_or("");
+                    historical_best.observe(
+                        &fuel_session_key,
+                        bytes_to_str(&sc.mScoringInfo.mTrackName),
+                        class,
+                        sc.mScoringInfo.mCurrentET,
+                    );
+                    build_session_info(sc, s.weather_forecast.clone(), historical_best.get())
+                })
             } else {
                 None
             };
