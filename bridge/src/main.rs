@@ -966,7 +966,16 @@ async fn task_broadcaster(
                         -1
                     };
 
-                    fuel_snapshot = fuel_tracker.update(current_fuel, current_lap, in_pits, session_laps_remaining, last_lap_time);
+                    let is_race = session_type_str(sc.mScoringInfo.mSession) == "Race";
+
+                    fuel_snapshot = fuel_tracker.update(
+                        current_fuel,
+                        current_lap,
+                        in_pits,
+                        session_laps_remaining,
+                        last_lap_time,
+                        is_race,
+                    );
                 }
             }
 

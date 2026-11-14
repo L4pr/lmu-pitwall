@@ -6,6 +6,11 @@ const PIT_FLASH_TICKS: u32 = 90;     // ~3 seconds at 30 Hz
 const MAX_VALID_FUEL: f64 = 1000.0;  // no race car has > 1000 L tank
 const MAX_VALID_LAP: i32 = 9_999;    // safety cap for mTotalLaps sentinel values
 const MAX_VALID_CONSUMPTION: f64 = 100.0; // L/lap upper limit
+/// In a race, the lap counter value once the first racing lap is complete.
+/// LMU always uses a rolling start and counts the formation lap, so lap 1 is
+/// the formation lap (already skipped as the stint's first lap) and lap 2 is
+/// the start: traffic, a bunched field and no clean air — not race pace.
+const FIRST_RACE_LAP: i32 = 2;
 
 #[derive(Debug, Clone)]
 pub struct FuelSnapshot {
@@ -50,6 +55,10 @@ pub struct FuelTracker {
     stint_start_fuel: f64,
     stint_laps: u32,
     pit_flash_ticks: u32,             // counts down; pit_detected = true while > 0
+    /// The car has been in the pit lane at some point during the current lap.
+    /// Such a lap (in-lap, out-lap, drive-through) is not representative pace,
+    /// so its time stays out of the average.
+    pitted_this_lap: bool,
 }
 
 impl FuelTracker {
@@ -65,6 +74,7 @@ impl FuelTracker {
             stint_start_fuel: 0.0,
             stint_laps: 0,
             pit_flash_ticks: 0,
+            pitted_this_lap: false,
         }
     }
 
@@ -75,6 +85,7 @@ impl FuelTracker {
     /// * `in_pits`               — mInPits from scoring
     /// * `session_laps_remaining`— laps left; ≤ 0 = time-based / unknown
     /// * `last_lap_time`         — mLastLapTime from scoring (seconds); ≤ 0 = invalid
+    /// * `is_race`               — race session; its first racing lap stays out of the lap-time average
     pub fn update(
         &mut self,
         current_fuel: f64,
@@ -82,6 +93,7 @@ impl FuelTracker {
         in_pits: bool,
         session_laps_remaining: i32,
         last_lap_time: f64,
+        is_race: bool,
     ) -> FuelSnapshot {
         // Always count down pit-flash independently of input validity
         if self.pit_flash_ticks > 0 {
@@ -97,6 +109,10 @@ impl FuelTracker {
             // Return snapshot based on last known good state without updating it
             let display_fuel = self.prev_fuel.unwrap_or(0.0);
             return self.build_snapshot(display_fuel);
+        }
+
+        if in_pits {
+            self.pitted_this_lap = true;
         }
 
         // --- Pit stop detection (fuel spike while in pits) ---
@@ -130,6 +146,7 @@ impl FuelTracker {
             self.stint_start_fuel  = current_fuel;
             self.stint_laps        = 0;
             self.pit_flash_ticks   = 0;
+            self.pitted_this_lap   = in_pits;
         }
 
         // --- First valid update: initialise tracker state ---
@@ -157,8 +174,12 @@ impl FuelTracker {
                         self.lap_fuel_samples.push_back(consumed);
                     }
                 }
-                // Lap time sample
-                if last_lap_time > 10.0 && last_lap_time < 600.0 {
+                // Lap time sample — not for a lap that went through the pit
+                // lane, nor for the opening lap of a race.
+                let race_start_lap = is_race && current_lap <= FIRST_RACE_LAP;
+                if !self.pitted_this_lap && !race_start_lap
+                    && last_lap_time > 10.0 && last_lap_time < 600.0
+                {
                     if self.lap_time_samples.len() >= MAX_SAMPLES {
                         self.lap_time_samples.pop_front();
                     }
@@ -169,6 +190,8 @@ impl FuelTracker {
             self.last_lap_number   = current_lap;
             self.fuel_at_lap_start = Some(current_fuel);
             self.stint_laps = (current_lap - self.stint_start_lap).max(0) as u32;
+            // Crossing the line in the pit lane makes the new lap an out-lap.
+            self.pitted_this_lap = in_pits;
         }
 
         // Suppress unused warning — session_laps_remaining kept for potential future use
@@ -213,5 +236,81 @@ fn median(samples: &VecDeque<f64>) -> f64 {
         (sorted[mid - 1] + sorted[mid]) / 2.0
     } else {
         sorted[mid]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Drives one lap: a tick mid-lap (optionally in the pit lane), then the
+    /// line crossing that completes it with `lap_time`.
+    fn lap(t: &mut FuelTracker, lap: i32, fuel: f64, mid_in_pits: bool, cross_in_pits: bool, lap_time: f64) -> FuelSnapshot {
+        t.update(fuel + 1.0, lap - 1, mid_in_pits, -1, -1.0, false);
+        t.update(fuel, lap, cross_in_pits, -1, lap_time, false)
+    }
+
+    fn race_lap(t: &mut FuelTracker, lap: i32, fuel: f64, lap_time: f64) -> FuelSnapshot {
+        t.update(fuel + 1.0, lap - 1, false, -1, -1.0, true);
+        t.update(fuel, lap, false, -1, lap_time, true)
+    }
+
+    fn race_start() -> FuelTracker {
+        let mut t = FuelTracker::new();
+        t.update(100.0, 0, false, -1, -1.0, false);
+        lap(&mut t, 1, 97.0, false, false, 130.0); // first lap of the stint: always skipped
+        t
+    }
+
+    #[test]
+    fn racing_laps_make_the_average() {
+        let mut t = race_start();
+        lap(&mut t, 2, 94.0, false, false, 100.0);
+        let snap = lap(&mut t, 3, 91.0, false, false, 102.0);
+        assert_eq!(snap.lap_time_count, 2);
+        assert_eq!(snap.avg_lap_time, 101.0);
+    }
+
+    /// A stop without refuelling (drive-through, tyres only) is never seen as a
+    /// new stint, so before this both of its laps counted.
+    #[test]
+    fn in_lap_and_out_lap_of_a_stop_without_fuel_are_left_out() {
+        let mut t = race_start();
+        lap(&mut t, 2, 94.0, false, false, 100.0);
+        lap(&mut t, 3, 91.0, true, true, 125.0);   // in-lap: crosses the line in the pit lane
+        lap(&mut t, 4, 88.0, false, false, 118.0); // out-lap: began in the pit lane
+        let snap = lap(&mut t, 5, 85.0, false, false, 102.0);
+        assert_eq!(snap.lap_time_count, 2);
+        assert_eq!(snap.avg_lap_time, 101.0);
+    }
+
+    /// Pit box past the line: the lap ends on track but contained the pit lane.
+    #[test]
+    fn a_lap_that_only_passed_through_the_pit_lane_is_left_out() {
+        let mut t = race_start();
+        lap(&mut t, 2, 94.0, false, false, 100.0);
+        let snap = lap(&mut t, 3, 91.0, true, false, 140.0);
+        assert_eq!(snap.lap_time_count, 1);
+        assert_eq!(snap.avg_lap_time, 100.0);
+    }
+
+    #[test]
+    fn the_opening_lap_of_a_race_is_left_out() {
+        let mut t = FuelTracker::new();
+        t.update(100.0, 0, false, -1, -1.0, true);
+        race_lap(&mut t, 1, 97.0, 150.0); // formation lap
+        race_lap(&mut t, 2, 94.0, 112.0); // the start
+        race_lap(&mut t, 3, 91.0, 100.0);
+        let snap = race_lap(&mut t, 4, 88.0, 102.0);
+        assert_eq!(snap.lap_time_count, 2);
+        assert_eq!(snap.avg_lap_time, 101.0);
+    }
+
+    /// Practice and qualifying have no standing field to fight through.
+    #[test]
+    fn outside_a_race_lap_two_counts() {
+        let mut t = race_start();
+        let snap = lap(&mut t, 2, 94.0, false, false, 100.0);
+        assert_eq!(snap.lap_time_count, 1);
     }
 }
